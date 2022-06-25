@@ -6,11 +6,32 @@ import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract DEX is VRFConsumerBaseV2, Ownable {
-    // VRF Helpers
-    mapping(uint256 => address) public s_requestIdToSender;
+/* This contract allows to swap between 4 coins, tied to different data feeds:
+    1) ETH
+    2) USD (USDT)
+    3) WZD (LINK)
+    4) ELF (Polygon)
+*/
 
-    AggregatorV3Interface private i_priceFeed;
+/* Every day, chainlink keepers will update the prices of these assets, 
+    combined with data feeds, and store them in this contract 
+*/
+
+/* The user can swap the tokens they want or automatize a random buy */
+
+contract DEX is VRFConsumerBaseV2, Ownable {
+    
+    /* Prices */
+    address[] constant TOKENRATES;
+    mapping (address => mapping (address => uint256)) s_prices;
+    mapping (address => mapping (address => uint256)) s_stake;
+
+    Event Swap(address input, address output, amount);
+
+    /* Data Feeds */
+    AggregatorV3Interface private immutable i_priceFeed;
+    
+    /* VRF */
     VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
     uint64 private immutable i_subscriptionId;
     bytes32 private immutable i_gasLane;
@@ -25,9 +46,7 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         uint32 _callbackGasLimit,
         address _priceFeed
     )
-        /* string[3] memory _dogTokenUris, */
         VRFConsumerBaseV2(_vrfCoordinatorV2)
-        ERC721("PokemonNFT", "PKM")
     {
         i_vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinatorV2);
         i_priceFeed = AggregatorV3Interface(_priceFeed);
@@ -36,9 +55,22 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         i_callbackGasLimit = _callbackGasLimit;
     }
 
-    function requestCharacter(string memory name)
+    function swap(address _input, address _output, uint256 _amount) external payable {
+        if(msg.value != 0) {
+            _amount = msg.value;
+        }
+        conversionRate = s_prices[_input][_output];
+        outputAmount = _amount*conversionRate;
+        msg.sender.transfer(outputAmount);
+        emit Swap(_input, _output, _amount);
+    }
+
+    function stake(address _input, uint256 _amount) external payable {
+        s_stake[msg.sender][_input] += _amount;
+    }
+
+    function requestId()
         public
-        payable
         returns (uint256 requestId)
     {
         requestId = i_vrfCoordinator.requestRandomWords(
@@ -48,9 +80,6 @@ contract DEX is VRFConsumerBaseV2, Ownable {
             i_callbackGasLimit,
             NUM_WORDS
         );
-        s_requestIdToSender[requestId] = msg.sender;
-        s_requestToCharacterName[requestId] = name;
-        emit characterRequest(requestId, msg.sender);
         return requestId;
     }
 
@@ -58,24 +87,18 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         internal
         override
     {
-        uint256 newTokenId = characters.length;
-        uint256 power = uint256(getLatestPrice() / 1e16);
-        uint256 health = randomWords[0] % 100;
-        uint256 attack = randomWords[1] % 100;
-        uint256 defense = randomWords[2] % 100;
-        Character memory character = Character(
-            power,
-            health,
-            attack,
-            defense,
-            s_requestToCharacterName[requestId]
-        );
-        characters.push(character);
-        _safeMint(s_requestIdToSender[requestId], newTokenId);
+        randomWords[2] % 100;
+    }
 
-        //the caller of this function is a chainlink node, so we cannot use msg.sender as the owner
-        /* Breed dogBreed = getBreedFromModdedRng(moddedRng);
-        _setTokenURI(newTokenId, s_dogTokenUris[uint256(dogBreed)]);
-        emit NftMinted(dogBreed, dogOwner); */
+    function updatePrices(address _token1, address _token2) private {
+        uint256 numberOfTokens = TOKENRATES.length;
+        for (uint256 i; i < numberOfTokens; i++){
+            _updatePrice(_token1, _token2, newPrice);
+        }
+    }
+
+    function _updatePrice(address _token1, address _token2, uint256 _newPrice) private {
+        uint256 newPrice = uint256(getLatestPrice() / 1e16); //decimals correct?
+        s_prices[_token1][_token2] = newPrice;
     }
 }
