@@ -5,6 +5,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /** @title EVM wallet generator
  *  @author David Camps Novi
@@ -21,6 +22,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract DEX is VRFConsumerBaseV2, Ownable {
 
+    struct Token {
+        uint128 price;
+        uint128 treasury;
+        AggregatorV3Interface priceFeed;
+    }
+
     /* VRF */
     VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
     uint64 private immutable i_subscriptionId;
@@ -30,15 +37,17 @@ contract DEX is VRFConsumerBaseV2, Ownable {
     uint32 private constant NUM_WORDS = 1;
 
     /* Data Feeds */
-    string[] private constant TOKENS = ["ETH", "BTC", "MATIC"];
-    mapping (string => uint256) private immutable i_tokenToUsd;
-    mapping (string => AggregatorV3Interface) private immutable i_tokenToPriceFeed;
+    address[] private immutable i_tokenList;
+    mapping (address => Token) s_tokens;
     
 
     /* Staking */
     mapping (address => mapping (address => uint256)) s_staked;
 
-    Event Swap(address input, address output, amount);
+    /* DCA */
+    address private s_dailyToken;
+
+    Event Swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
     Event PriceUpdate(address token, uint256 newPrice);
 
 
@@ -49,7 +58,8 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         uint32 _callbackGasLimit,
         address _ethUsdPriceFeed,
         address _btcUsdtPriceFeed,
-        address _maticUsdPriceFeed
+        address _maticUsdPriceFeed,
+        address[] _tokens
     )
         VRFConsumerBaseV2(_vrfCoordinatorV2)
     {
@@ -63,48 +73,63 @@ contract DEX is VRFConsumerBaseV2, Ownable {
     }
 
     /**
-     *  @notice 
+     *  @notice This function allows to swap any pair of tokens
      *  @dev 
      */
-    function buy(string memory _token, uint256 _usd) external {
-        //transferFrom(_usd)
+    function swap(address _tokenIn, address _tokenOut, uint256 _amountIn) external {
+        //corner cases of ETH and USD!!!
+        uint256 amountOut = _amountIn*(i_tokenToUsd[_tokenOut]/i_tokenToUsd[_tokenIn]);
+        s_treasury[_tokenOut] -= amountOut;
+        s_treasury[_tokenIn] += _amountIn;
+        IERC20(_tokenIn).transferFrom(msg.sender, address(this), _amountIn);
+        IERC20(_tokenOut).transferFrom(address(this), msg.sender, amountOut);
         msg.sender.transfer(1/i_tokenToUsd);
-        emit Swap(_input, _output, _amount);
+        emit Swap(_tokenIn, _tokenOut, _amountIn, amountOut);
     }
 
     /**
      *  @notice 
      *  @dev 
      */
-    function stake(address _input, uint256 _amount) external payable {
-        s_stake[msg.sender][_input] += _amount;
+    function stake(address _token, uint256 _amount) external payable {
+        s_stake[msg.sender][_token] += _amount;
+        stakeTime = block.timestamp;
+        farmed += (block.timestamp - stakeTime)*yield;
+        IERC20(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
     /**
      *  @notice 
      *  @dev 
      */
-    function dca(uint256 _amount) external {} 
+    function blindDca(uint256 _amount) external {} 
 
-    function updatePrices() external {
-        for (uint256 i; i < TOKENS.length; i++){
-            string memory token = TOKENS[i];
-            uint256 newPrice = uint256(_updatePrice(i_tokenToPriceFeed[token]);
-            i_tokenToUsd[token] = newPrice;
+    /**
+     *  @notice This function updates the prices of all tokens
+     */
+    function updateTokenPrices() external {
+        for (uint256 i; i < i_tokens.length; i++){
+            address token = i_tokens[i];
+            (,int tokenPrice,,,) = (i_tokenToPriceFeed[token]).latestRoundData();
+            i_tokenToUsd[token] = uint256(tokenPrice);
         }
     }
 
-    function _updatePrice(AggregatorV3Interface _priceFeed) private returns (int) {
-        (
-            /*uint80 roundID*/,
-            int price,
-            /*uint startedAt*/,
-            /*uint timeStamp*/,
-            /*uint80 answeredInRound*/
-        ) = _priceFeed.latestRoundData();
-        return price;
-    }
+    /**
+     *  @notice This function updates the daily token for DCA and requests another random token
+     */
+    function setDailyToken() external {
+        uint256 tokenId = fulfillRandomWords();
+        s_dailyToken = i_tokens[tokenId];
+        requestId();
+    } 
 
+
+    /**
+     *  @dev This function requests a random value to the Chainlink VRF nodes and returns
+     *  an ID for that request. To get the random value, a second call to the oracle is 
+     *  necessary, done through the function fulfillRandomWords()
+     */
     function requestId() 
         external
         returns (uint256 requestId)
@@ -119,10 +144,15 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         return requestId;
     }
 
+    /**
+     *  @notice This function returns a random value from 0 to 2
+     *  @dev This function returns a modded randomWords from the Chainlink VRF
+     */
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
         internal
         override
+        returns(uint256)
     {
-        randomWords[0] % 2;
+        return (randomWords[0] % 2);
     }
 }
