@@ -10,23 +10,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 /** @title EVM wallet generator
  *  @author David Camps Novi
  *  @dev This contract is a simple DEX that allows any user to perform 3 types of operations:
- *      - Swap coins
- *      - Stake coins
- *      - DCA into coins
- *  Only 4 coins can be used:
- *      - USD
- *      - ETH
- *      - WZD
- *      - ELF
+ *      - Swap coins --> introduce amount of a token A to receive its equivalent in token B
+ *      - Stake coins --> introduce amount of token A to be locked into this contract to produce yield
+ *      - Blind DCA --> approve how much USD you allow the DEX to spend periodically on a randomly selected coin
  */
-
 contract DEX is VRFConsumerBaseV2, Ownable {
-
-    struct Token {
-        uint128 price;
-        uint128 treasury;
-        AggregatorV3Interface priceFeed;
-    }
 
     /* VRF */
     VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
@@ -35,17 +23,24 @@ contract DEX is VRFConsumerBaseV2, Ownable {
     uint32 private immutable i_callbackGasLimit;
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
+    uint256 public constant INTERVAL;
+    uint256 public lastTimeStamp;
 
     /* Data Feeds */
     address[] private immutable i_tokenList;
-    mapping (address => Token) s_tokens;
-    
+    mapping(address => uint256) private s_tokenToUsd;
+    mapping(address => AggregatorV3Interface) s_priceFeeds;
 
     /* Staking */
     mapping (address => mapping (address => uint256)) s_staked;
 
     /* DCA */
     address private s_dailyToken;
+    address[] private s_dca;
+    mapping (address => mapping (address => uint256)) s_balances;
+
+    /* DEX treasury */
+    mapping (address => uint256) s_treasury;
 
     Event Swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
     Event PriceUpdate(address token, uint256 newPrice);
@@ -58,7 +53,6 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         uint32 _callbackGasLimit,
         address _ethUsdPriceFeed,
         address _btcUsdtPriceFeed,
-        address _maticUsdPriceFeed,
         address[] _tokens
     )
         VRFConsumerBaseV2(_vrfCoordinatorV2)
@@ -67,23 +61,29 @@ contract DEX is VRFConsumerBaseV2, Ownable {
         i_subscriptionId = _subscriptionId;
         i_gasLane = _gasLane;
         i_callbackGasLimit = _callbackGasLimit;
-        i_ethUsdPriceFeed = AggregatorV3Interface(_ethUsdPriceFeed);
-        i_btcUsdPriceFeed = AggregatorV3Interface(_btcUsdtPriceFeed);
-        i_maticUsdPriceFeed = AggregatorV3Interface(_maticUsdPriceFeed);
+        s_priceFeeds[_ethUsdPriceFeed] = AggregatorV3Interface(_ethUsdPriceFeed);
+        s_priceFeeds[_btcUsdtPriceFeed] = AggregatorV3Interface(_btcUsdtPriceFeed);
+        for (uint256 i; i < _tokens.length; i++){
+            i_tokenList.push(_tokens[i]);
+        }
     }
 
     /**
      *  @notice This function allows to swap any pair of tokens
      *  @dev 
      */
-    function swap(address _tokenIn, address _tokenOut, uint256 _amountIn) external {
-        //corner cases of ETH and USD!!!
-        uint256 amountOut = _amountIn*(i_tokenToUsd[_tokenOut]/i_tokenToUsd[_tokenIn]);
+    function swap(address _tokenIn, address _tokenOut, uint256 _amountIn) public {
+        uint256 amountOut;
+        if (_tokenIn == USD) {
+            amountOut = _amountIn / s_tokenToUsd[_tokenOut]
+        } else {
+            amountOut = _amountIn*s_tokenToUsd[_tokenIn]/s_tokenToUsd[_tokenOut];
+        }
         s_treasury[_tokenOut] -= amountOut;
         s_treasury[_tokenIn] += _amountIn;
+        IERC20(_tokenIn).approve(address(this), _amountIn);
         IERC20(_tokenIn).transferFrom(msg.sender, address(this), _amountIn);
         IERC20(_tokenOut).transferFrom(address(this), msg.sender, amountOut);
-        msg.sender.transfer(1/i_tokenToUsd);
         emit Swap(_tokenIn, _tokenOut, _amountIn, amountOut);
     }
 
@@ -102,14 +102,17 @@ contract DEX is VRFConsumerBaseV2, Ownable {
      *  @notice 
      *  @dev 
      */
-    function blindDca(uint256 _amount) external {} 
+    function blindDca(uint256 _deposit, uint256 _amount) external {
+        IERC20(i_tokenList[0]).approve(address(this), _deposit);
+        s_dca.push(msg.sender);
+    }
 
     /**
      *  @notice This function updates the prices of all tokens
      */
-    function updateTokenPrices() external {
-        for (uint256 i; i < i_tokens.length; i++){
-            address token = i_tokens[i];
+    function _updateTokenPrices() private {
+        for (uint256 i; i < i_tokenList.length; i++){
+            address token = i_tokenList[i];
             (,int tokenPrice,,,) = (i_tokenToPriceFeed[token]).latestRoundData();
             i_tokenToUsd[token] = uint256(tokenPrice);
         }
@@ -118,20 +121,19 @@ contract DEX is VRFConsumerBaseV2, Ownable {
     /**
      *  @notice This function updates the daily token for DCA and requests another random token
      */
-    function setDailyToken() external {
-        uint256 tokenId = fulfillRandomWords();
-        s_dailyToken = i_tokens[tokenId];
-        requestId();
+    function _setDailyToken() private {
+        uint256 tokenId = _fulfillRandomWords() + 1;
+        s_dailyToken = i_tokenList[tokenId];
     } 
 
 
     /**
      *  @dev This function requests a random value to the Chainlink VRF nodes and returns
-     *  an ID for that request. To get the random value, a second call to the oracle is 
+     *  an ID for that request. To get the random value, a second call to the oracle is
      *  necessary, done through the function fulfillRandomWords()
      */
-    function requestId() 
-        external
+    function _requestId() 
+        private
         returns (uint256 requestId)
     {
         requestId = i_vrfCoordinator.requestRandomWords(
@@ -148,11 +150,27 @@ contract DEX is VRFConsumerBaseV2, Ownable {
      *  @notice This function returns a random value from 0 to 2
      *  @dev This function returns a modded randomWords from the Chainlink VRF
      */
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
-        internal
+    function _fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
+        private
         override
         returns(uint256)
     {
-        return (randomWords[0] % 2);
+        return (randomWords[0] % 1);
+    }
+
+    function checkUpkeep(bytes calldata checkData) external override returns (bool upkeepNeeded, bytes memory performData) {
+        upkeepNeeded = (block.timestamp - lastTimeStamp) > INTERVAL;
+        performData = checkData;
+    }
+
+    function performUpkeep(bytes calldata performData) external override {
+        lastTimeStamp = block.timestamp;
+        for (uint256 i; i < s_dca.length; i++) {
+            
+        }
+        _updateTokenPrices();
+        _setDailyToken();
+        _requestId();
+        performData;
     }
 }
