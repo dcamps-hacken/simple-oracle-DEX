@@ -10,11 +10,7 @@ contract Wizard is ERC20, Ownable {
     }
 
     function mint(address _to, uint256 _amount) external {
-        _mint(_to, _amount);
-    }
-
-    function getTotalSupply() external view returns (uint256) {
-        uint256 supply = totalSupply();
-        return supply;
+        uint256 amount = _amount * 10**decimals();
+        _mint(_to, amount);
     }
 }

@@ -12,9 +12,4 @@ contract StableCoin is ERC20, Ownable {
     function mint(address _to, uint256 _amount) external {
         _mint(_to, _amount);
     }
-
-    function getTotalSupply() external view returns (uint256) {
-        uint256 supply = totalSupply();
-        return supply;
-    }
 }
