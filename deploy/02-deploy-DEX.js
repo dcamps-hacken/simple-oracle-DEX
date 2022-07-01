@@ -32,11 +32,11 @@ module.exports = async ({ deployments, getNamedAccounts }) => {
         networkConfig[chainId]["callbackGasLimit"],
         MockV3AggregatorAddress,
     ]
-    await deploy("PokemonNft", {
+    await deploy("DEX", {
         from: deployer,
         args: args,
         log: true,
-        AwaitConfirmations: network.config.blockConfirmations || 4,
+        AwaitConfirmations: network.config.blockConfirmations || 5,
     })
 
     //if (

@@ -8,6 +8,8 @@ import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+error DEX__UpkeepNotNeeded();
+
 /** @title EVM wallet generator
  *  @author David Camps Novi
  *  @dev This contract is a simple DEX that allows any user to perform 3 types of operations:
@@ -23,7 +25,7 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
     uint32 private immutable i_callbackGasLimit;
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
-    uint256 public constant INTERVAL = 1; //to be defined!!
+    uint256 public constant INTERVAL = 604800;
     uint256 public lastTimeStamp;
 
     /* Data Feeds */
@@ -115,7 +117,7 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
      *  @notice
      *  @dev
      */
-    function stake(address _token, uint256 _amount) external payable {
+    function stake(address _token, uint256 _amount) external {
         s_staked[msg.sender][_token] += _amount;
         //uint256 stakeTime = block.timestamp;
         //uint256 farmed = (block.timestamp - stakeTime) * yield;
@@ -123,6 +125,8 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
 
         emit Stake(msg.sender, _token, _amount);
     }
+
+    function unstake() external {}
 
     /**
      *  @notice
@@ -196,16 +200,27 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         s_dailyToken = s_tokenList[tokenId];
     }
 
-    function checkUpkeep(bytes calldata checkData)
-        external
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        public
         override
-        returns (bool upkeepNeeded, bytes memory performData)
+        returns (
+            bool upkeepNeeded,
+            bytes memory /* performData */
+        )
     {
         upkeepNeeded = (block.timestamp - lastTimeStamp) > INTERVAL;
-        performData = checkData;
     }
 
-    function performUpkeep(bytes calldata performData) external override {
+    function performUpkeep(
+        bytes calldata /* performData */
+    ) external override {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        if (!upkeepNeeded) {
+            revert DEX__UpkeepNotNeeded();
+        }
+
         lastTimeStamp = block.timestamp;
 
         for (uint256 i; i < s_dcaUsers.length; i++) {
@@ -213,7 +228,6 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         }
         _updateTokenPrices();
         _requestId();
-        performData;
     }
 
     function getTokenPrice(address _token) external view returns (uint256) {
