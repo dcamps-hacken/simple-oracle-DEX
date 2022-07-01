@@ -7,7 +7,11 @@ require("hardhat-deploy")
 
 module.exports = {
     solidity: {
-        compilers: [{ version: "0.8.7" }, { version: "0.8.0" }],
+        compilers: [
+            { version: "0.8.7" },
+            { version: "0.8.0" },
+            { version: "0.7.0" },
+        ],
     },
     defaultNetwork: "hardhat",
     networks: {
@@ -40,14 +44,14 @@ module.exports = {
             blockConfirmations: 5,
         },
     },
-    gasReporter: {
+    /* gasReporter: {
         enabled: false,
         outputFile: "gas-report.txt",
         noColors: true,
         currency: "USD",
         coinmarketcap: COINMARKETCAP_API_KEY,
         token: "MATIC",
-    },
+    }, */
     etherscan: {
         apiKey: process.env.ETHERSCAN_API_KEY,
     },

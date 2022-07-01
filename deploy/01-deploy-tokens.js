@@ -1,3 +1,6 @@
+const { developmentChains, networkConfig } = require("../helper-hardhat-config")
+const { verify } = require("../utils/verify.js")
+
 module.exports = async ({ deployments, getNamedAccounts }) => {
     const { deploy, log } = deployments
     const { deployer } = await getNamedAccounts()
@@ -29,7 +32,7 @@ module.exports = async ({ deployments, getNamedAccounts }) => {
     ) {
         log("Verifying...")
         await verify(usd.address, arguments)
-        await verify(wizard.address, arguments)
+        await verify(wzd.address)
         await verify(elf.address, arguments)
     }
     log("--------------------------")
