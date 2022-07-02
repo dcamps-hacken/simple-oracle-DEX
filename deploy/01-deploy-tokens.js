@@ -9,24 +9,21 @@ module.exports = async ({ deployments, getNamedAccounts }) => {
         from: deployer,
         log: true,
         args: [],
-        AwaitConfirmations: network.config.blockConfirmations || 5,
     })
 
     const wizard = await deploy("Wizard", {
         from: deployer,
         log: true,
         args: [],
-        AwaitConfirmations: network.config.blockConfirmations || 5,
     })
 
     const elf = await deploy("Elf", {
         from: deployer,
         log: true,
         args: [],
-        AwaitConfirmations: network.config.blockConfirmations || 5,
     })
 
-    if (
+    /* if (
         !developmentChains.includes(network.name) &&
         process.env.ETHERSCAN_API_KEY
     ) {
@@ -34,6 +31,6 @@ module.exports = async ({ deployments, getNamedAccounts }) => {
         await verify(usd.address, arguments)
         await verify(wzd.address)
         await verify(elf.address, arguments)
-    }
+    } */
     log("--------------------------")
 }
