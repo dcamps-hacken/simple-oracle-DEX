@@ -5,12 +5,20 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract StableCoin is ERC20, Ownable {
-    constructor() ERC20("WizardCoin", "WZD") {
+    constructor()
+        /* address _dex */
+        ERC20("WizardCoin", "WZD")
+    {
         _mint(msg.sender, 1e10 * 10**decimals());
     }
 
     function mint(address _to, uint256 _amount) external {
         uint256 amount = _amount * 10**decimals();
         _mint(_to, amount);
+    }
+
+    function burn(address _from, uint256 _amount) external onlyOwner {
+        uint256 amount = _amount * 10**decimals();
+        _burn(_from, amount);
     }
 }

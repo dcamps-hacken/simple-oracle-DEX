@@ -26,4 +26,12 @@ describe("Wizard", function () {
             assert.equal(userBalance.toString(), minted.toString())
         })
     })
+    describe("mint", async function () {
+        it("Should burn tokens", async function () {
+            const burn = await wizard.burn(user, "1")
+            await burn.wait() // wait until the transaction is mined
+            const newBalance = await elf.balanceOf(user)
+            assert.equal(newBalance.toString(), constants.Zero.toString())
+        })
+    })
 })
