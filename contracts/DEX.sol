@@ -92,7 +92,7 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         address _tokenIn,
         address _tokenOut,
         uint256 _amountIn
-    ) public {
+    ) external {
         uint256 amountOut;
 
         if (_tokenIn == s_tokenList[0]) {
@@ -142,6 +142,48 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         emit DcaSet(_deposit, _amount);
     }
 
+    function performUpkeep(
+        bytes calldata /* performData */
+    ) external override {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        if (!upkeepNeeded) {
+            revert DEX__UpkeepNotNeeded();
+        }
+
+        lastTimeStamp = block.timestamp;
+
+        for (uint256 i; i < s_dcaUsers.length; i++) {
+            _buyDca(s_dcaUsers[i], s_dcaAmount[msg.sender], s_dailyToken); // POTENTIAL ERROR (NOT ENOUGH BALANCE)
+        }
+        _updateTokenPrices();
+        _requestId();
+    }
+
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        public
+        override
+        returns (
+            bool upkeepNeeded,
+            bytes memory /* performData */
+        )
+    {
+        upkeepNeeded = (block.timestamp - lastTimeStamp) > INTERVAL;
+    }
+
+    /**
+     *  @notice This function returns a random value from 0 to 2
+     *  @dev This function returns a modded randomWords from the Chainlink VRF
+     */
+    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
+        internal
+        override
+    {
+        uint256 tokenId = (randomWords[0] % 1) + 1;
+        s_dailyToken = s_tokenList[tokenId];
+    }
+
     function _buyDca(
         address _recipient,
         uint256 _amount,
@@ -186,48 +228,6 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
             NUM_WORDS
         );
         return requestId;
-    }
-
-    /**
-     *  @notice This function returns a random value from 0 to 2
-     *  @dev This function returns a modded randomWords from the Chainlink VRF
-     */
-    function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords)
-        internal
-        override
-    {
-        uint256 tokenId = (randomWords[0] % 1) + 1;
-        s_dailyToken = s_tokenList[tokenId];
-    }
-
-    function checkUpkeep(
-        bytes memory /* checkData */
-    )
-        public
-        override
-        returns (
-            bool upkeepNeeded,
-            bytes memory /* performData */
-        )
-    {
-        upkeepNeeded = (block.timestamp - lastTimeStamp) > INTERVAL;
-    }
-
-    function performUpkeep(
-        bytes calldata /* performData */
-    ) external override {
-        (bool upkeepNeeded, ) = checkUpkeep("");
-        if (!upkeepNeeded) {
-            revert DEX__UpkeepNotNeeded();
-        }
-
-        lastTimeStamp = block.timestamp;
-
-        for (uint256 i; i < s_dcaUsers.length; i++) {
-            _buyDca(s_dcaUsers[i], s_dcaAmount[msg.sender], s_dailyToken); // POTENTIAL ERROR (NOT ENOUGH BALANCE)
-        }
-        _updateTokenPrices();
-        _requestId();
     }
 
     function getTokenPrice(address _token) external view returns (uint256) {
