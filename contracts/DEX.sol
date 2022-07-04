@@ -8,7 +8,13 @@ import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+interface Itoken {
+    function mint(address _to, uint256 _amount) external;
+}
+
 error DEX__UpkeepNotNeeded();
+error DEX__NotEnoughUserBalance();
+error DEX__NotEnoughTreasury();
 
 /** @title EVM wallet generator
  *  @author David Camps Novi
@@ -81,6 +87,7 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         );
         for (uint256 i; i < _tokens.length; i++) {
             s_tokenList[i] = _tokens[i];
+            addTreasury(_tokens[i], 1e10);
         }
     }
 
@@ -159,6 +166,10 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         _requestId();
     }
 
+    function addTreasury(address _tokenAddress, uint256 _amount) public {
+        Itoken(_tokenAddress).mint(address(this), _amount);
+    }
+
     function checkUpkeep(
         bytes memory /* checkData */
     )
@@ -190,10 +201,12 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
         address _tokenOut
     ) private {
         uint256 amountOut = _amount / s_tokenToUsd[_tokenOut];
-
-        s_balances[_recipient][s_tokenList[0]] -= _amount; //POTENTIAL ERROR (NOT ENOUGH BALANCE)
+        if (s_balances[_recipient][s_tokenList[0]] < _amount)
+            revert DEX__NotEnoughUserBalance();
+        if (s_treasury[_tokenOut] < _amount) revert DEX__NotEnoughTreasury();
+        s_balances[_recipient][s_tokenList[0]] -= _amount;
         s_balances[_recipient][_tokenOut] += _amount;
-        s_treasury[_tokenOut] -= _amount; //POTENTIAL ERROR (NOT ENOUGH BALANCE)
+        s_treasury[_tokenOut] -= _amount;
         s_treasury[s_tokenList[0]] += _amount;
 
         IERC20(s_tokenList[0]).transferFrom(_recipient, address(this), _amount); //POTENTIAL ERROR (NOT ENOUGH BALANCE)
@@ -204,6 +217,7 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
 
     /**
      *  @notice This function updates the prices of all tokens
+     *  @dev Chainlink data feeds are used in this method to update the prices of the tokens in this DEX
      */
     function _updateTokenPrices() private {
         for (uint256 i; i < s_tokenList.length; i++) {
@@ -236,5 +250,23 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
 
     function getDailyToken() external view returns (address) {
         return s_dailyToken;
+    }
+
+    function getTreasury(address _tokenAddress)
+        external
+        view
+        returns (uint256 treasury)
+    {
+        treasury = s_treasury[_tokenAddress];
+        return treasury;
+    }
+
+    function getBalance(address _user, address _token)
+        external
+        view
+        returns (uint256 balance)
+    {
+        balance = s_balances[_user][_token];
+        return balance;
     }
 }
