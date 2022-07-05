@@ -1,15 +1,14 @@
 const { expect, assert } = require("chai")
-const { ethers, getNamedAccounts } = require("hardhat")
+const { ethers, getNamedAccounts, deployments } = require("hardhat")
 const { BigNumber, constants } = require("ethers")
 
 describe("DEX", function () {
     const tokens = [usd, wzd, elf]
     const mint = "1000000"
     beforeEach(async function () {
-        dex = await ethers.getContract("DEX")
-        deployer = (await getNamedAccounts()).deployer
-        user1 = (await getNamedAccounts()).user1
-        user2 = (await getNamedAccounts()).user2
+        const { deployer, user1, user2 } = await getNamedAccounts()
+        //await deployments.fixture(["all"])
+        dex = await ethers.getContract("DEX", deployer)
     })
     describe("constructor", function () {
         beforeEach(async function () {})
