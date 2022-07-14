@@ -2,9 +2,13 @@
 
 > ⏳⚠️ This project is currently under construction ⚠️⏳
 
-**Oracle DEX** project consists of a main hybrid [_DEX_](https://github.com/fields93/simple-oracle-DEX/blob/main/contracts/DEX.sol) smart contract containing the all features, and integrating Chainlink's [Data Feeds](https://docs.chain.link/docs/using-chainlink-reference-contracts/), [VRF](https://docs.chain.link/docs/chainlink-vrf/) and [Keepers](https://docs.chain.link/docs/chainlink-keepers/introduction/).
+**Oracle DEX** project is a simple DeFi project for Swaping or Staking tokens. It also allows to DCA (Dollar Cost Average) into tokens.
 
-In additional, [_elf_](https://github.com/fields93/simple-oracle-DEX/blob/main/contracts/elf.sol), [_wizard_](https://github.com/fields93/simple-oracle-DEX/blob/main/contracts/wizard.sol) and [_stablecoin_](https://github.com/fields93/simple-oracle-DEX/blob/main/contracts/stablecoin.sol) contracts in this project are used to deploy ERC20 tokens that can be used for testing. Other tokens won't work.
+The project uses the **Chainlink** oracle to provide the token pricing (Data Feeds), DCA into random tokens (VRF) and automatize operations (Keepers).
+
+The DEX only works with 3 test tokens that have been created for this purpose: $USD, $WZD and $ELF.
+
+> ⚠️ Explain how to get test tokens ⚠️
 
 ## QUICKSTART 🚀
 

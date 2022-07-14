@@ -31,7 +31,6 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
     uint32 private immutable i_callbackGasLimit;
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
-    uint256 public constant INTERVAL = 604800;
 
     /* Data Feeds */
     address[] private s_tokenList;
@@ -40,6 +39,7 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
 
     /* Keepers */
     uint256 public lastTimeStamp;
+    uint256 public constant INTERVAL = 604800;
 
     /* Staking */
     mapping(address => mapping(address => uint256)) private s_staked;
@@ -279,28 +279,14 @@ contract DEX is VRFConsumerBaseV2, KeeperCompatibleInterface, Ownable {
             VRFCoordinatorV2Interface vrfCoordinator,
             uint64 subscriptionId,
             bytes32 gasLane,
-            uint32 callBackGasLimit,
-            uint16 requestConfirmations,
-            uint32 numWords,
-            uint256 interval
+            uint32 callBackGasLimit
         )
     {
         vrfCoordinator = i_vrfCoordinator;
         subscriptionId = i_subscriptionId;
         gasLane = i_gasLane;
         callBackGasLimit = i_callbackGasLimit;
-        requestConfirmations = REQUEST_CONFIRMATIONS;
-        numWords = NUM_WORDS;
-        interval = INTERVAL;
-        return (
-            vrfCoordinator,
-            subscriptionId,
-            gasLane,
-            callBackGasLimit,
-            requestConfirmations,
-            numWords,
-            interval
-        );
+        return (vrfCoordinator, subscriptionId, gasLane, callBackGasLimit);
     }
 
     function getTokens() external view returns (address[] memory) {

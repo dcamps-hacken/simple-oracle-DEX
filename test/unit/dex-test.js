@@ -1,6 +1,7 @@
 const { expect, assert } = require("chai")
 const { ethers, getNamedAccounts, deployments } = require("hardhat")
 const { BigNumber, constants } = require("ethers")
+const { networkConfig } = require("../../helper-hardhat-config")
 
 describe("DEX", function () {
     const tokens = [usd, wzd, elf]
@@ -11,8 +12,27 @@ describe("DEX", function () {
         dex = await ethers.getContract("DEX", deployer)
     })
     describe("constructor", function () {
-        beforeEach(async function () {})
-        it("", async function () {})
+        it("sets VRF variables correctly", async function () {
+            const vrfVars = await dex.getVrfVars()
+            const {
+                0: vrfCoordinator,
+                1: subscriptionId,
+                2: gasLane,
+                3: callBackGasLimit,
+            } = vrfVars
+        })
+        it("sets the price feeds", async function () {
+            const ethPriceFeed = dex.getPriceFeed(networkConfig[chainId][eth])
+            const btcPriceFeed = dex.getPriceFeed(networkConfig[chainId][btc])
+
+            expect(ethPriceFeed).to.equal(
+                networkConfig[chainId][ethUsdPriceFeed]
+            )
+            expect(btcPriceFeed).to.equal(
+                networkConfig[chainId][btcUsdPriceFeed]
+            )
+        })
+        it("adds the tokens addresses", async function () {})
     })
     describe("swap", function () {
         beforeEach(async function () {})
